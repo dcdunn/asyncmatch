@@ -1,4 +1,4 @@
-from asyncmatch import Probe
+from asyncmatch import Probe, Timeout
 from threading import Thread, Event
 from hamcrest import greater_than
 from time import sleep
@@ -45,10 +45,14 @@ def test_usage_of_probe():
     counter = Counter()
     thread = CountingThread(counter)
     probe = CounterProbe(counter, greater_than(500))
+    timeout = Timeout(5.0, 0.01)
 
     thread.start()
 
     while not probe.is_satisfied():
+        if timeout.timed_out():
+            raise AssertionError("Probe did not satisfy condition within timeout")
+        timeout.sleep()
         probe.sample()
     
     thread.stop()
