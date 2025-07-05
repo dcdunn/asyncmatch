@@ -39,3 +39,9 @@ In their famous book, [Growing Object-Oriented Software Guided by Tests](https:/
 This project is a simple implementation in Python of those ideas, and is compatible with [PyHamcrest](https://github.com/hamcrest/PyHamcrest).
 
 
+## Probes
+
+A *Probe* is an object that probes some state of the system, and uses a PyHamcrest matcher to understand if that state has satisfied some desired condition. The *Probe* underpins the *assert_eventually* matcher.
+
+Tip: a *Probe* can can sample in its initialise function. This gives the test an opportunity to pass quickly, before the first sleep.
+
