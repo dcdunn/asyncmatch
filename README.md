@@ -45,3 +45,13 @@ A *Probe* is an object that probes some state of the system, and uses a PyHamcre
 
 Tip: a *Probe* can can sample in its initialise function. This gives the test an opportunity to pass quickly, before the first sleep.
 
+## Poller
+
+The *Poller* checks a *Probe* until it is satisfied or it times out. 
+
+```python
+poller = Poller(Timeout(5.0, 0.1))
+
+# blocks until MyProbe satisfied. Raises AssertionError if times out
+poller.check(MyProbe())
+```
