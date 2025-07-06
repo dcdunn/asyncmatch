@@ -1,10 +1,12 @@
-from asyncmatch import Probe, Timeout
+from asyncmatch import Probe, assert_eventually
+from asyncmatch.timeout import Timeout
 from asyncmatch.poller import Poller, PollerTimeout
 from threading import Thread, Event
-from contextlib import contextmanager
 from hamcrest import (
     greater_than,
     less_than,
+    assert_that,
+    equal_to
 )
 import pytest
 
@@ -29,7 +31,7 @@ class CountingThread(Thread):
         return self.counter.get_count()
 
     def run(self):
-        while not self.stop_event.is_set():
+        while not self.stop_event.is_set() and self.get_count() < 501:
             self.counter.increment()
     
     def stop(self):
@@ -57,6 +59,12 @@ class CounterProbe(Probe):
     
     def sample(self):
         self.count = self.counter.get_count()
+    
+    def describe_to(self, description):
+        description.append_description_of(self.matcher)
+
+    def describe_mismatch(self, description):
+        self.matcher.describe_mismatch(self.count, description)
 
 def test_usage_of_probe(counting_thread):
     timeout = Timeout(5.0, 0.01)
@@ -75,3 +83,13 @@ def test_timeout_of_poller(counting_thread):
     with pytest.raises(PollerTimeout) as err:
         poller = Poller(Timeout(0.1, 0.01))
         poller.check(CounterProbe(counting_thread, less_than(0)))
+
+def test_usage_of_assert_eventually(counting_thread):
+    assert_eventually(CounterProbe(counting_thread, greater_than(500)), 5.0, 0.01)
+
+def test_timeout_of_assert_eventually(counting_thread):
+    with pytest.raises(AssertionError) as err:
+        assert_eventually(CounterProbe(counting_thread, less_than(0)), 0.1, 0.01, "Bespoke reason")
+    
+    assert_that(str(err.value),
+        equal_to("Bespoke reason\nExpected: a value less than <0>\n     but: was <501>"))

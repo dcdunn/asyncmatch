@@ -1,5 +1,7 @@
+from hamcrest.core.selfdescribing import SelfDescribing
+from hamcrest.core.description import Description
 
-class Probe:
+class Probe(SelfDescribing):
 
     """
     Probes some state of the subject-under-test.
@@ -18,5 +20,11 @@ class Probe:
         Takes a snapshot of the current state. Only sample
         in this method, so that the state can be checked
         and reported in subsequent calls to is_satisfied
+        """
+        raise NotImplementedError
+
+    def describe_mismatch(self, description: Description) -> None:
+        """
+        On failure, describe the mismatch.
         """
         raise NotImplementedError
