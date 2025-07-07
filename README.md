@@ -118,6 +118,8 @@ except PollerTimeout:
 
 ```
 
+## *assert_eventually* and *wait_until*
+
 You should not use the poller directly, but instead use the *assert_eventually*
 function call which takes care of polling and reporting errors back to the test
 framework. In the *assert_eventually* method *PollerTimeout* is handled, and
@@ -125,11 +127,18 @@ converted to an *AssertionError*, which pytest and other frameworks treat as
 test failures. The diagnostic message in the error is generated using the
 Hamcrest compatible describiber methods.
 
+Freeman & Pryce recommend distinguishing synchronisations from assertions. In
+the _Arrange_ section of a test, we need to put the system into a known initial
+state, and this may involve asynchronous operations. This library also provides
+a *wait_until* method. Operationally, it is the same as *assert_eventually*
+except that when the underlying poller times out, it raises a
+*SynchronisationTimeout* to distinguish it from an assertion.
+
 ### Usage tips
 
-In the example given early, we need to synchronise the test with the SUT. We
-need to write a *Probe* that reads the state of the device's LEDs, probably a
-subset of the GPIO pins.
+In the example given earlier, to synchronise the test with the SUT, we need to
+write a *Probe* that reads the state of the device's LEDs, probably a subset of
+the GPIO pins.
 
 ```python
 # GpioProbe.py
@@ -153,6 +162,7 @@ class GpioProbe(Probe):
     def is_satisfied(self):
         return self.matcher.matches(self.current)
 ```
+
 Then the test might be similar to this:
 
 ```python

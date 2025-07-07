@@ -1,4 +1,9 @@
-from asyncmatch import Probe, assert_eventually
+from asyncmatch import (
+    Probe,
+    assert_eventually,
+    wait_until,
+    SynchronisationTimeout
+)
 from asyncmatch.timeout import Timeout
 from asyncmatch.poller import Poller, PollerTimeout
 from threading import Thread, Event
@@ -90,6 +95,16 @@ def test_usage_of_assert_eventually(counting_thread):
 def test_timeout_of_assert_eventually(counting_thread):
     with pytest.raises(AssertionError) as err:
         assert_eventually(CounterProbe(counting_thread, less_than(0)), 0.1, 0.01, "Bespoke reason")
+    
+    assert_that(str(err.value),
+        equal_to("Bespoke reason\nExpected: a value less than <0>\n     but: was <501>"))
+
+def test_usage_of_wait_until(counting_thread):
+    wait_until(CounterProbe(counting_thread, greater_than(500)), 5.0, 0.01)
+
+def test_timeout_of_wait_until(counting_thread):
+    with pytest.raises(SynchronisationTimeout) as err:
+        wait_until(CounterProbe(counting_thread, less_than(0)), 0.1, 0.01, "Bespoke reason")
     
     assert_that(str(err.value),
         equal_to("Bespoke reason\nExpected: a value less than <0>\n     but: was <501>"))
