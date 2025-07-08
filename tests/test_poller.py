@@ -50,3 +50,9 @@ class TestPoller:
             call.probe.is_satisfied()
         ])
 
+    def test_should_raise_type_error_if_probe_does_not_return_bool(self, mockery):
+        mockery.probe.return_value = {"key": "value"}
+        mockery.timeout.timed_out.return_value = False
+        poller = Poller(mockery.timeout)
+        with pytest.raises(TypeError):
+            poller.check(mockery.probe)

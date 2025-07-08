@@ -89,22 +89,40 @@ def test_timeout_of_poller(counting_thread):
         poller = Poller(Timeout(0.1, 0.01))
         poller.check(CounterProbe(counting_thread, less_than(0)))
 
+count_of = CounterProbe
+
 def test_usage_of_assert_eventually(counting_thread):
-    assert_eventually(CounterProbe(counting_thread, greater_than(500)), 5.0, 0.01)
+    assert_eventually(count_of(counting_thread, greater_than(500)), 5.0, 0.01)
 
 def test_timeout_of_assert_eventually(counting_thread):
     with pytest.raises(AssertionError) as err:
-        assert_eventually(CounterProbe(counting_thread, less_than(0)), 0.1, 0.01, "Bespoke reason")
+        assert_eventually(count_of(counting_thread, less_than(0)), 0.1, 0.01, "Bespoke reason")
     
     assert_that(str(err.value),
         equal_to("Bespoke reason\nExpected: a value less than <0>\n     but: was <501>"))
 
 def test_usage_of_wait_until(counting_thread):
-    wait_until(CounterProbe(counting_thread, greater_than(500)), 5.0, 0.01)
+    wait_until(count_of(counting_thread, greater_than(500)), 5.0, 0.01)
 
 def test_timeout_of_wait_until(counting_thread):
     with pytest.raises(SynchronisationTimeout) as err:
-        wait_until(CounterProbe(counting_thread, less_than(0)), 0.1, 0.01, "Bespoke reason")
+        wait_until(count_of(counting_thread, less_than(0)), 0.1, 0.01, "Bespoke reason")
     
     assert_that(str(err.value),
         equal_to("Bespoke reason\nExpected: a value less than <0>\n     but: was <501>"))
+
+def test_usage_of_assert_eventually_with_callable_as_probe(counting_thread):
+    def is_satisfied() -> bool:
+        return True
+
+    assert_eventually(is_satisfied, 5.0, 0.01)
+
+def test_timeout_of_assert_eventually_with_callable_as_probe(counting_thread):
+    def led_is_on() -> bool:
+        return False
+
+    with pytest.raises(AssertionError) as err:
+        assert_eventually(led_is_on, 0.1, 0.01, "Bespoke reason")
+
+    assert_that(str(err.value),
+        equal_to("Bespoke reason\nExpected: led_is_on to be satisfied\n     but: led_is_on was not satisfied"))

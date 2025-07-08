@@ -53,7 +53,8 @@ to synchronise with the subject-under-test (SUT). As for any synchronisation
 problem, there are two categories of approach: listen for an event
 or periodically poll for state.
 
-This project is a simple implementation in Python of those ideas, and is compatible with [PyHamcrest](https://github.com/hamcrest/PyHamcrest).
+This project is a simple implementation in Python of those ideas, and is
+compatible with [PyHamcrest](https://github.com/hamcrest/PyHamcrest).
 
 ## Polling for changes
 
@@ -88,19 +89,44 @@ class UsbDeviceProbe(Probe):
     def describe_mismatch(self, description):
         self.matcher.describe_mismatch(self.connected_devices, description)
 ```
-Depending on how the device tree is represented, standard Hamcrest matchers can be used to check for, say, a particular Vendor ID and product ID:
+Depending on how the device tree is represented, standard Hamcrest matchers can
+be used to check for, say, a particular Vendor ID and product ID:
 ```python
 probe = UsbDeviceProbe(has_item(has_entries(
   "vendor_id": VID,
   "product_id": PID
 )))
 ```
-This example also shows how you can lean on the descriptions provided by Hamcrest matchers to generate useful diagnostic information when a test fails.  
+This example also shows how you can lean on the descriptions provided by
+Hamcrest matchers to generate useful diagnostic information when a test fails.  
 
-Tip: a *Probe* can can sample in its initialise function. This gives the test an opportunity to pass quickly, before the first polling delay.
+Tip: a *Probe* can can sample in its initialise function. This gives the test an
+opportunity to pass quickly, before the first polling delay.
+
+Sometimes a callable object that returns a boolean value is sufficient to define
+a *Probe*. The *async* module also provides a *CallableProbe*, which a helper
+class to make use of such a callable. 
+
+```python
+from asyncmatch.callable_probe import CallableProbe
+
+def red_led_is_on():
+    # whatever it takes, return True or False
+
+probe = CallableProbe(red_led_is_on)
+
+```
+
+Attempting to initialise with an object that is not callable will result in a
+*TypeError* being raised. Apart from *class*, any callable is acceptable. The
+*name of the function will be used to build the *CallableProbe*'s describer
+*methods. You should not need to create a *CallableProbe* directly. The
+**assert_eventually* and *wait_until* functions will do that automatically if
+*you provide a callable as the first parameter.
 
 ### Poller
-The *Poller* checks a *Probe* until it is satisfied or it times out. The _check_ method blocks until the test has passed or else raises a *PollerTimeout* error.
+The *Poller* checks a *Probe* until it is satisfied or it times out. The _check_
+method blocks until the test has passed or else raises a *PollerTimeout* error.
 
 ```python
 
@@ -125,7 +151,7 @@ function call which takes care of polling and reporting errors back to the test
 framework. In the *assert_eventually* method *PollerTimeout* is handled, and
 converted to an *AssertionError*, which pytest and other frameworks treat as
 test failures. The diagnostic message in the error is generated using the
-Hamcrest compatible describiber methods.
+Hamcrest compatible describer methods.
 
 Freeman & Pryce recommend distinguishing synchronisations from assertions. In
 the _Arrange_ section of a test, we need to put the system into a known initial
@@ -133,8 +159,6 @@ state, and this may involve asynchronous operations. This library also provides
 a *wait_until* method. Operationally, it is the same as *assert_eventually*
 except that when the underlying poller times out, it raises a
 *SynchronisationTimeout* to distinguish it from an assertion.
-
-### Usage tips
 
 In the example given earlier, to synchronise the test with the SUT, we need to
 write a *Probe* that reads the state of the device's LEDs, probably a subset of
@@ -191,9 +215,22 @@ need to determine how long it is acceptable to wait before concluding that the
 state change is not going to happen.
 
 . Cases where I have used this approach include:
- * Checking that a USB command sent to a docking station results in an image on a screen. The test harness sends the command, and a frame grabber driver senses what pixels are displayed. This operation might take of the order of tenths of a second, so timeout duration of say a few seconds, with a polling interval of 0.1s gives responsive and reliable tests.
- * Checking that a POST to a REST API is relayed through an IoT backend and translated into a protocol sent over MQTT to a device. The SUT is the backend, including the API gateway. An MQTT client driver in the test harness receives the messages sent. The message is usually relayed in fractions of a second, so a good duration is maybe a second or two, and a polling delay of 0.01s gives fast tests.
- * At a test suite setup, the SUT is a Windows device driver. The setup should make a clean installation of the driver, and wait for the device to enumerate in Windows' device tree. While this usually take a few tens of seconds, it can take up to two minutes. In this case a duration of three minutes and a polling interval of a second is appropriate.
+ * Checking that a USB command sent to a docking station results in an image on a screen. The
+   test harness sends the command, and a frame grabber driver senses what pixels
+   are displayed. This operation might take of the order of tenths of a second,
+   so timeout duration of say a few seconds, with a polling interval of 0.1s
+   gives responsive and reliable tests.
+ * Checking that a POST to a REST API is relayed through an IoT backend and translated into a protocol
+   sent over MQTT to a device. The SUT is the backend, including the API
+   gateway. An MQTT client driver in the test harness receives the messages
+   sent. The message is usually relayed in fractions of a second, so a good
+   duration is maybe a second or two, and a polling delay of 0.01s gives fast
+   tests.
+ * At a test suite setup, the SUT is a Windows device driver. The setup should make
+  a clean installation of the driver, and wait for the device to enumerate in
+  Windows' device tree. While this usually take a few tens of seconds, it can
+  take up to two minutes. In this case a duration of three minutes and a polling
+  interval of a second is appropriate.
 
 Freeman & Pryce recommend to establish the timeout parameters for the SUT, and
 express them in one place. For library code such as in this project, that
@@ -270,3 +307,12 @@ Careful design can unlock the higher order grammar of Hamcrest. For example, we 
     ))
 ```
 
+Finally, you can provide a callable as the argument to *assert_eventually* or *wait_until*:
+
+```python
+def red_led_is_on():
+    # whatever it takes, return True or False
+
+assert_eventually(red_led_is_on)
+
+```
