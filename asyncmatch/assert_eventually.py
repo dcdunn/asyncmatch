@@ -6,7 +6,7 @@ from .timeout import Timeout
 from collections.abc import Callable
 from hamcrest.core.string_description import StringDescription
 from hamcrest.core.helpers.ismock import ismock
-from typing import Optional
+from typing import Optional, Union
 
 def _report_failure_of_probe(probe: Probe, reason: str, exc_type: Exception) -> None:
     description = StringDescription()
@@ -17,7 +17,7 @@ def _report_failure_of_probe(probe: Probe, reason: str, exc_type: Exception) -> 
     probe.describe_mismatch(description)
     raise exc_type(description) from None
 
-def _get_probe(probe: Probe | Callable[[], bool]) -> Probe:
+def _get_probe(probe: Union[Probe, Callable[[], bool]]) -> Probe:
     """
     Converts a callable into a CallableProbe instance if necessary.
     """
@@ -31,7 +31,7 @@ def _wait_for_poller(poller: Poller, probe: Probe, reason: str, exc_type: Except
     except PollerTimeout:
         _report_failure_of_probe(probe, reason, exc_type)
 
-def assert_eventually(probe: Probe | Callable[[], bool], duration: float, poll_delay: float, reason: Optional[str] = "") -> None:
+def assert_eventually(probe: Union[Probe, Callable[[], bool]], duration: float, poll_delay: float, reason: Optional[str] = "") -> None:
     """
     Polls some system state using the Probe, until it is satisfied or it times
     out. ``assert_eventually`` is designed to integrate well with PyUnit, pytest
@@ -48,7 +48,7 @@ def assert_eventually(probe: Probe | Callable[[], bool], duration: float, poll_d
         reason,
         AssertionError)
 
-def wait_until(probe: Probe | Callable[[], bool], duration: float, poll_delay: float, reason: Optional[str] = "") -> None:
+def wait_until(probe: Union[Probe, Callable[[], bool]], duration: float, poll_delay: float, reason: Optional[str] = "") -> None:
     """
     Similar to assert_eventaully, but raises a SynchronisationTimeout if the
     Poller times out.
