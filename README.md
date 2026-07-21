@@ -56,6 +56,27 @@ or periodically poll for state.
 This project is a simple implementation in Python of those ideas, and is
 compatible with [PyHamcrest](https://github.com/hamcrest/PyHamcrest).
 
+## Installation
+
+Install from GitHub using pip:
+
+```bash
+# Latest from default branch
+pip install "git+https://github.com/dcdunn/asyncmatch.git"
+
+# Pinned to a release tag (recommended)
+pip install "git+https://github.com/dcdunn/asyncmatch.git@v0.1.0"
+
+# Pinned to a specific commit
+pip install "git+https://github.com/dcdunn/asyncmatch.git@<commit-sha>"
+```
+
+For local development from a clone:
+
+```bash
+pip install -e .
+```
+
 ## Polling for changes
 
 Freeman & Pryce create an asynchronous assertion method, that waits for a particular state of the SUT to occur, or else to fail by timing out. There are three concepts that are required: a *Timeout*, a *Probe* and a *Poller*. 

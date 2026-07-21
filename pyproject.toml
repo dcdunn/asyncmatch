@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asyncmatch"
+version = "0.1.0"
+description = "Asynchronous polling assertions for Python tests"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+  { name = "David Dunn" }
+]
+dependencies = [
+  "PyHamcrest>=2.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/dcdunn/asyncmatch"
+Repository = "https://github.com/dcdunn/asyncmatch"
+Issues = "https://github.com/dcdunn/asyncmatch/issues"
+
+[tool.setuptools]
+packages = ["asyncmatch"]
