@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## [Unreleased]
+## [0.2.0] - 2026-11-19
 
 ### Added
 - Added `NotificationTrace` for synchronising by listening rather than polling. The SUT calls the thread-safe `append(item)`. Tests call `assert_eventually_contains(matcher, duration, reason)`, which raises `AssertionError`, or `wait_until_contains(...)`, which raises `SynchronisationTimeout`. Both search every item appended since the trace was created and wake as soon as a match arrives.
