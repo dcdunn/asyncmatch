@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from asyncmatch.timeout import Timeout
 from hamcrest import assert_that, equal_to
 
@@ -25,3 +25,19 @@ def test_should_use_system_sleep():
         timeout = Timeout(10.0, 0.42)
         timeout.sleep()
         sleep.assert_called_once_with(0.42)
+
+def test_should_wait_on_condition_for_time_remaining():
+    with patch("asyncmatch.timeout.time") as time:
+        time.side_effect = [0.0, 2.0]
+        condition = MagicMock()
+        timeout = Timeout(5.0)
+        timeout.wait_on(condition)
+        condition.wait.assert_called_once_with(3.0)
+
+def test_should_not_wait_on_condition_if_timed_out():
+    with patch("asyncmatch.timeout.time") as time:
+        time.side_effect = [0.0, 6.0]
+        condition = MagicMock()
+        timeout = Timeout(5.0)
+        timeout.wait_on(condition)
+        condition.wait.assert_not_called()
