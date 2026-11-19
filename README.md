@@ -103,7 +103,7 @@ class UsbDeviceProbe(Probe):
     def sample(self):
         # Use OS APIs to create a dict repreenting the USB tree
         self.connected_devices = ...
-    def is_satified(self) -> bool:
+    def is_satisfied(self) -> bool:
         return self.matcher.matches(self.connected_devices)
     def describe_to(self, description):
         description.append_description_of(self.matcher)
@@ -114,8 +114,8 @@ Depending on how the device tree is represented, standard Hamcrest matchers can
 be used to check for, say, a particular Vendor ID and product ID:
 ```python
 probe = UsbDeviceProbe(has_item(has_entries(
-  "vendor_id": VID,
-  "product_id": PID
+  vendor_id=VID,
+  product_id=PID
 )))
 ```
 This example also shows how you can lean on the descriptions provided by
@@ -132,7 +132,7 @@ class to make use of such a callable.
 from asyncmatch.callable_probe import CallableProbe
 
 def red_led_is_on():
-    # whatever it takes, return True or False
+    ...  # whatever it takes, return True or False
 
 probe = CallableProbe(red_led_is_on)
 
@@ -152,8 +152,8 @@ method blocks until the test has passed or else raises a *PollerTimeout* error.
 ```python
 
 probe = UsbDeviceProbe(has_item(has_entries(
-  "vendor_id": VID,
-  "product_id": PID
+  vendor_id=VID,
+  product_id=PID
 )))
 
 poller = Poller(Timeout(5.0, 0.1))
@@ -161,7 +161,7 @@ poller = Poller(Timeout(5.0, 0.1))
 try:
     poller.check(probe)
 except PollerTimeout:
-    # did not satify the probe in time
+    ...  # the probe was not satisfied in time
 
 ```
 
@@ -206,7 +206,17 @@ class GpioProbe(Probe):
     
     def is_satisfied(self):
         return self.matcher.matches(self.current)
+
+    def describe_to(self, description):
+        description.append_text("GPIOs ").append_description_of(self.matcher)
+
+    def describe_mismatch(self, description):
+        self.matcher.describe_mismatch(self.current, description)
 ```
+
+A probe must implement *describe_to* and *describe_mismatch*. They build the
+failure message when the probe is never satisfied. Without them, a failing test
+raises *NotImplementedError* instead of reporting what went wrong.
 
 Then the test might be similar to this:
 
@@ -299,11 +309,11 @@ This is easily implemented, perhaps as follows.
 
 # ....
 
-def _led(gpio: str, state: str) -> Matcher
+def _led(gpio: str, state: str) -> Matcher:
     if state == "on":
         state = "high"
     elif state == "off":
-        state == "low":
+        state = "low"
     else:
         raise ValueError(f"unknown LED state {state}")
     return has_entry(gpio, state)
@@ -314,7 +324,7 @@ def red(state: str) -> Matcher:
 def green(state: str) -> Matcher:
     return _led("gpio4", state)
 
-def leds(matcher: Matcher) -> GpioProbe
+def leds(matcher: Matcher) -> GpioProbe:
     return GpioProbe(matcher)
 
 ```
@@ -325,14 +335,14 @@ Careful design can unlock the higher order grammar of Hamcrest. For example, we 
     assert_eventually(leds(all_of(
         red("on"),
         green("off")
-    ))
+    )))
 ```
 
 Finally, you can provide a callable as the argument to *assert_eventually* or *wait_until*:
 
 ```python
 def red_led_is_on():
-    # whatever it takes, return True or False
+    ...  # whatever it takes, return True or False
 
 assert_eventually(red_led_is_on)
 

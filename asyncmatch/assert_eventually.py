@@ -3,10 +3,9 @@ from .exceptions import SynchronisationTimeout
 from .probe import Probe
 from .poller import Poller, PollerTimeout
 from .timeout import Timeout
-from collections.abc import Callable
 from hamcrest.core.string_description import StringDescription
 from hamcrest.core.helpers.ismock import ismock
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 def _report_failure_of_probe(probe: Probe, reason: str, exc_type: Exception) -> None:
     description = StringDescription()

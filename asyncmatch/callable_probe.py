@@ -1,5 +1,5 @@
 from .probe import Probe
-from collections.abc import Callable
+from typing import Callable
 from inspect import isclass
 
 def _callable_description(callable_obj: Callable) -> str:
@@ -13,11 +13,8 @@ def _callable_description(callable_obj: Callable) -> str:
     if hasattr(callable_obj, '__name__'):
         return callable_obj.__name__
 
-    # If it's a callable class, use its class name
-    if hasattr(type(callable_obj), '__name__'):
-        return type(callable_obj).__name__
-
-    return "Martin"
+    # An instance of a class with __call__: use its class name
+    return type(callable_obj).__name__
 
 class CallableProbe(Probe):
     def __init__(self, probe_func: Callable[[], bool]):

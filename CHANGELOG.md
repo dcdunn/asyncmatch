@@ -19,6 +19,11 @@ The format is based on Keep a Changelog.
 - `Timeout`'s `poll_delay` argument is now optional (default `0.0`).
 - When no reason is given, failure messages from `assert_eventually` and `wait_until` now start with `Expected:` instead of a blank line.
 
+### Fixed
+- asyncmatch can now be imported on Python 3.9.0 and 3.9.1. `Callable` now comes from `typing` instead of `collections.abc`, whose subscripted form fails inside `Union` on those versions (bpo-42195).
+- Removed an unreachable fallback in `CallableProbe`'s description, which returned the placeholder `"Martin"`.
+- README examples: the `GpioProbe` example now implements `describe_to` and `describe_mismatch`, and the README explains why a probe needs them. Fixed the `is_satified` typo in the `UsbDeviceProbe` example; without the fix, that probe raised `NotImplementedError`. Fixed syntax errors in several examples, including the `_led` helper's `state == "low":`.
+
 ## [0.1.0] - 2026-07-21
 
 ### Added
