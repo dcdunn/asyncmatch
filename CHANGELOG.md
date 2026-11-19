@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## [Unreleased]
+## [0.2.1] - 2026-11-19
 
 ### Added
 - README: a "Quick reference" table and a numbered "Guidelines" list near the top.
