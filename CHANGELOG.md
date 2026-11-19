@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## [Unreleased]
+
+### Added
+- README: a "Quick reference" table and a numbered "Guidelines" list near the top.
+- README: "Express what is tested, not how" and "Let the matcher do the describing". The second explains why to leave out `reason` strings, and shows a domain matcher (`LedMatcher`) whose descriptions read "Expected: red LED on / but: red LED was off".
+- README: an "Avoiding unreliable tests" section, from GOOS ch. 27, covering runaway tests, synchronising on the last effect, polling in phases, testing that an action has no effect by polling, hidden timers (with a `FakeScheduler`), flickering tests, and watching the test fail.
+
+### Changed
+- README: the `GpioProbe` example's `describe_to` no longer adds a "GPIOs " prefix, so domain matcher descriptions read cleanly. The timeout wrappers make `reason` optional and add `wait_until`.
+
+### Fixed
+- README: typos, the garbled `CallableProbe` paragraph, and unused or missing imports in the opening example.
+
 ## [0.2.0] - 2026-11-19
 
 ### Added

@@ -1,7 +1,7 @@
 # asyncmatch
 
-DISCLAIMER: none of the code in this page is real, but is for illustrative purposes.
-It may not be syntatically correct.
+DISCLAIMER: the systems in this page are not real. The examples are for
+illustration, and show how to use asyncmatch rather than a complete program.
 
 Python is often used for integration or system testing. A particular challenge
 is the inherent asynchrony in the subject-under-test (SUT). Well-designed
@@ -17,8 +17,7 @@ standard Arrange-Act-Assert pattern.
 # This is not a real system!
 
 from api import get_endpoint
-from device import Device
-from matchers import pin_high
+from hamcrest import assert_that, has_entry
 
 # Fixture - device is a test double
 def test_led_remote_control(device):
@@ -40,7 +39,7 @@ change is not carried into effect immediately.
 
 A naive approach is to add a wait after sending the message. At the very least
 this will make the test take the duration of the wait to pass. More likely, it
-will be be an unreliable test. The common ameliorative, increasing the duration,
+will be an unreliable test. The common ameliorative, increasing the duration,
 simply makes the test take even longer to run, and the sinking feeling that the
 tests are cumbersome and unreliable.
 
@@ -55,6 +54,68 @@ or periodically poll for state.
 
 This project is a simple implementation in Python of those ideas, and is
 compatible with [PyHamcrest](https://github.com/hamcrest/PyHamcrest).
+
+## Quick reference
+
+| You want to... | Use | On timeout raises |
+|---|---|---|
+| Check that the SUT eventually reaches a state you can read | `assert_eventually(probe, duration, poll_delay)` | `AssertionError` |
+| Wait for the SUT to be ready before the next step (Arrange, or between phases) | `wait_until(probe, duration, poll_delay)` | `SynchronisationTimeout` |
+| Poll a simple yes/no condition | pass a callable as the probe: `assert_eventually(red_led_is_on, ...)` | as above |
+| Poll a state and report it well when the test fails | a `Probe` subclass that wraps a Hamcrest matcher | as above |
+| Record events the SUT emits (callbacks, MQTT, logs) | `NotificationTrace`, fed by `trace.append(item)` | |
+| Check that a matching event eventually arrives | `trace.assert_eventually_contains(matcher, duration)` | `AssertionError` |
+| Wait for an event before the next step | `trace.wait_until_contains(matcher, duration)` | `SynchronisationTimeout` |
+| Check that events arrive in order | `trace.assert_eventually_contains_in_order([m1, m2], duration)` / `wait_until_contains_in_order` | as above |
+| Check what has already arrived, after synchronising | `trace.assert_contains`, `assert_contains_in_order`, `assert_does_not_contain` | `AssertionError` |
+| Test in phases that the SUT starts by itself | `trace.wait_until_phase_ends(sentinel, duration)` returns a `Phase` | `SynchronisationTimeout` |
+| Test in phases that the test starts | `trace.clear()` before the action that starts the phase | |
+
+Use **polling** (a `Probe`) when you can only read the state of the SUT. Use
+**listening** (a `NotificationTrace`) when the SUT, or a test double attached to
+it, tells you when something happens, and always when a state may be
+overwritten before a poll would see it.
+
+## Guidelines
+
+These are the rules from Freeman & Pryce's chapter, and from their advice on
+matchers, that keep asynchronous tests reliable, fast and readable. The
+sections that follow explain each one.
+
+1. **Wait for success, and fail by timing out.** Never `time.sleep()` and then
+   assert. A fixed sleep makes passing tests slow and failing tests flaky.
+2. **Succeed fast.** A passing test should return as soon as the SUT reaches the
+   expected state. Keep the polling delay small, sample once when a probe is
+   created, and prefer listening when the SUT emits events.
+3. **Express what is tested, not how it is tested.** A test should read as the
+   state change it checks for, such as `assert_eventually(leds(red("on")))`.
+   Hide probes, traces, payload formats, pin numbers and timeouts in helpers.
+   See "Express what is tested, not how".
+4. **Let the matcher do the describing.** Do not explain a failure with a
+   `reason` string. Write matchers and probes whose descriptions say what was
+   expected and what was found, in the language of the domain. See "Let the
+   matcher do the describing".
+5. **Put the timeout values in one place, and find them by experiment.** See
+   "Flickering tests".
+6. **Distinguish synchronisations from assertions.** Use `wait_until...` when the
+   test is only waiting for the SUT to be ready. Use `assert_eventually...` for
+   the behaviour under test. A synchronisation that looks redundant often
+   prevents a race, so do not delete it.
+7. **Make sure the test cannot run ahead of the SUT.** If the expected state is
+   also the starting state, the assertion passes before the SUT has done
+   anything. See "Runaway tests".
+8. **Synchronise on the last effect of an action.** The first visible sign that
+   the SUT has acted is not always the end of its work. See "Synchronise on the
+   last effect".
+9. **Poll in phases, and listen when updates can be lost.** Stimulate, wait for
+   the change to be visible, then stimulate again. See "Polling tests run in
+   phases" and "Listening for notifications".
+10. **Test that something did not happen by making something else happen.** See
+    "Testing that an action has no effect".
+11. **Take control of hidden timers.** Do not wait for real time to pass. See
+    "Hidden timers".
+12. **Watch each test fail, and read the message.** See "Watch the test fail".
+13. **Keep matchers stateless.** Keep state in the probe or the trace.
 
 ## Installation
 
@@ -101,7 +162,7 @@ class UsbDeviceProbe(Probe):
         self.matcher = matcher
         self.sample()
     def sample(self):
-        # Use OS APIs to create a dict repreenting the USB tree
+        # Use OS APIs to create a dict representing the USB tree
         self.connected_devices = ...
     def is_satisfied(self) -> bool:
         return self.matcher.matches(self.connected_devices)
@@ -121,12 +182,14 @@ probe = UsbDeviceProbe(has_item(has_entries(
 This example also shows how you can lean on the descriptions provided by
 Hamcrest matchers to generate useful diagnostic information when a test fails.  
 
-Tip: a *Probe* can can sample in its initialise function. This gives the test an
-opportunity to pass quickly, before the first polling delay.
+Tip: a *Probe* can sample in its *__init__* method. This gives the test an
+opportunity to pass quickly, before the first polling delay. Create the probe at
+the point of the assertion, after the action, so that this first sample is of
+the state you are waiting for.
 
 Sometimes a callable object that returns a boolean value is sufficient to define
-a *Probe*. The *async* module also provides a *CallableProbe*, which a helper
-class to make use of such a callable. 
+a *Probe*. asyncmatch also provides a *CallableProbe*, a helper class that
+wraps such a callable.
 
 ```python
 from asyncmatch.callable_probe import CallableProbe
@@ -139,11 +202,13 @@ probe = CallableProbe(red_led_is_on)
 ```
 
 Attempting to initialise with an object that is not callable will result in a
-*TypeError* being raised. Apart from *class*, any callable is acceptable. The
-*name of the function will be used to build the *CallableProbe*'s describer
-*methods. You should not need to create a *CallableProbe* directly. The
-**assert_eventually* and *wait_until* functions will do that automatically if
-*you provide a callable as the first parameter.
+*TypeError* being raised. Apart from a class, any callable is acceptable. The
+name of the function is used in the *CallableProbe*'s descriptions, so choose a
+name that reads well in a failure message, such as *red_led_is_on*. A callable
+cannot report what it found, so prefer a *Probe* with a matcher when the
+failure message matters. You should not need to create a *CallableProbe*
+directly. The *assert_eventually* and *wait_until* functions do that
+automatically if you provide a callable as the first parameter.
 
 ### Poller
 The *Poller* checks a *Probe* until it is satisfied or it times out. The _check_
@@ -208,7 +273,7 @@ class GpioProbe(Probe):
         return self.matcher.matches(self.current)
 
     def describe_to(self, description):
-        description.append_text("GPIOs ").append_description_of(self.matcher)
+        description.append_description_of(self.matcher)
 
     def describe_mismatch(self, description):
         self.matcher.describe_mismatch(self.current, description)
@@ -217,6 +282,11 @@ class GpioProbe(Probe):
 A probe must implement *describe_to* and *describe_mismatch*. They build the
 failure message when the probe is never satisfied. Without them, a failing test
 raises *NotImplementedError* instead of reporting what went wrong.
+
+Keep the two halves of a probe apart. *sample* is the only method that reads the
+SUT, and it stores what it read. *is_satisfied* and *describe_mismatch* only look
+at that stored sample. Then the failure message reports exactly the state that
+failed the check.
 
 Then the test might be similar to this:
 
@@ -245,7 +315,7 @@ that it covers the acceptable envelope of normal operating times, i.e. you will
 need to determine how long it is acceptable to wait before concluding that the
 state change is not going to happen.
 
-. Cases where I have used this approach include:
+Cases where I have used this approach include:
  * Checking that a USB command sent to a docking station results in an image on a screen. The
    test harness sends the command, and a frame grabber driver senses what pixels
    are displayed. This operation might take of the order of tenths of a second,
@@ -278,8 +348,11 @@ import asyncmatch
 DURATION_SECS = 5.0
 POLL_DELAY_SECS = 0.1
 
-def assert_eventually(probe, reason):
+def assert_eventually(probe, reason=""):
     asyncmatch.assert_eventually(probe, DURATION_SECS, POLL_DELAY_SECS, reason)
+
+def wait_until(probe, reason=""):
+    asyncmatch.wait_until(probe, DURATION_SECS, POLL_DELAY_SECS, reason)
 
 def test_led_remote_control(device):
     remote_control = get_endpoint("/remote")
@@ -287,12 +360,27 @@ def test_led_remote_control(device):
     assert_eventually(GpioProbe(has_entry("gpio3", "high")), "The red LED is not on")
 ```
 
+Put these wrappers in one helper module that all the tests import, so that
+there is exactly one place to change the timeouts.
+
+### Express what is tested, not how
+
 This test is still cluttered with details of how the test is carried out, and
 exposes to the reader that there is a probe that uses a dictionary to record the
 state of the GPIOs.  Tests provide the most value when they document clearly and
 concisely the system state transition that they are checking for. A good test
 should express _what_ is being tested without exposing the details of _how_ the test
-is carried out - good tests are declarative rather than imperative.  
+is carried out - good tests are declarative rather than imperative.
+
+The *how* includes:
+
+* the mechanism: a probe, a poller or a trace;
+* the representation: dictionaries, payload formats, pin numbers, register
+  values;
+* the timing: durations and polling delays.
+
+The *what* is the state change in the language of the domain: the red LED is
+on, the device has enumerated, the order has been accepted. 
 
 It can be useful to write the assertion _first_, in a way that declares what the
 system state is. Then, implement the *Probe* and some helper functions to
@@ -337,6 +425,80 @@ Careful design can unlock the higher order grammar of Hamcrest. For example, we 
         green("off")
     )))
 ```
+
+### Let the matcher do the describing
+
+The example tests above pass a *reason*, such as "The red LED is not on". Leave
+it out. A reason is a second description of the check, written by hand, and it
+can drift away from what the check really does. The probe and its matcher
+already know what was expected and what was found. When they describe it well,
+the failure message needs nothing else.
+
+With *red* built from *has_entry*, as above, the message describes the
+representation, not the domain:
+
+```
+Expected: a dictionary containing ['gpio3': 'high']
+     but: value for 'gpio3' was 'low'
+```
+
+A reader has to know that gpio3 is the red LED and that high means on. Give
+*red* and *green* a matcher of their own, whose descriptions use the language
+of the test. Follow Hamcrest's convention: the two descriptions should complete
+the sentence "Expected *description* but *mismatch description*".
+
+```python
+# GpioProbe.py
+from hamcrest.core.base_matcher import BaseMatcher
+
+_PINS = {"red": "gpio3", "green": "gpio4"}
+_LEVELS = {"on": "high", "off": "low"}
+_STATES = {"high": "on", "low": "off"}
+
+class LedMatcher(BaseMatcher):
+    def __init__(self, colour: str, state: str):
+        self.colour = colour
+        self.state = state
+
+    def _matches(self, gpios) -> bool:
+        return gpios.get(_PINS[self.colour]) == _LEVELS[self.state]
+
+    def describe_to(self, description):
+        description.append_text(f"{self.colour} LED {self.state}")
+
+    def describe_mismatch(self, gpios, description):
+        level = gpios.get(_PINS[self.colour])
+        description.append_text(f"{self.colour} LED was {_STATES.get(level, level)}")
+
+def red(state: str) -> LedMatcher:
+    return LedMatcher("red", state)
+
+def green(state: str) -> LedMatcher:
+    return LedMatcher("green", state)
+```
+
+Now the same failure reads:
+
+```
+Expected: red LED on
+     but: red LED was off
+```
+
+The matcher still combines with the rest of Hamcrest. A failure of
+*leds(all_of(red("on"), green("off")))* reports:
+
+```
+Expected: (red LED on and green LED off)
+     but: red LED on red LED was off
+```
+
+A matcher like this must be stateless, because Hamcrest may call it any number
+of times. Keep state, such as the last sample, in the probe or the trace.
+
+Use a *reason* only for something that no matcher can know, such as which
+iteration of a loop failed.
+
+### Callables
 
 Finally, you can provide a callable as the argument to *assert_eventually* or *wait_until*:
 
@@ -735,3 +897,192 @@ Things to keep in mind:
 * **Keep the pairs out of the test.** The test should say what happened, as in
   *have_shown_consecutively(red("blink"), red("off"))*, not how the helper
   records it.
+
+## Avoiding unreliable tests
+
+An asynchronous test can be wrong in two ways. It can fail when the SUT works,
+which makes it a *flickering* test. Or it can pass when the SUT is broken,
+because it checked before the SUT had done anything. The second is worse,
+because nobody looks at a passing test. The techniques in this section, all
+from Freeman & Pryce, prevent both.
+
+### Runaway tests
+
+Be careful when a test asserts that the SUT returns to a previous state. The
+red LED starts off, so this test can pass before the SUT has processed either
+command:
+
+```python
+def test_red_led_on_then_off(remote):
+    remote.send(red_led="on")
+    remote.send(red_led="off")
+    assert_eventually(leds(red("off")))   # passes at once, testing nothing
+```
+
+The test has run ahead of the SUT. Make it wait for the intermediate state
+before it sends the next command:
+
+```python
+def test_red_led_on_then_off(remote):
+    remote.send(red_led="on")
+    wait_until(leds(red("on")))
+    remote.send(red_led="off")
+    assert_eventually(leds(red("off")))
+```
+
+With listening, *assert_eventually_contains_in_order* checks the
+intermediate state for you: `led_events.have_shown_in_order(red("on"),
+red("off"))`. When a test repeats an action, see *clear* in "Testing in
+phases".
+
+The same trap catches a probe that is created before the action. It samples
+the old state when it is created, and if the old state already matches, the
+assertion passes at once. Create probes at the point of the assertion.
+
+### Synchronise on the last effect
+
+An action can have several effects, and the test sees them one at a time. If
+the test synchronises on the first effect and moves on, the SUT may not have
+finished the rest. The next step then races the SUT.
+
+For example, suppose that when an LED is switched on, the SUT notifies its
+listeners and then starts an auto-off timer. A test that waits for the
+notification and then fires the timer can fire it before the timer exists.
+The test fails rarely, and only on a busy machine:
+
+```python
+def test_led_turns_itself_off(remote, led_events, scheduler):
+    remote.send(red_led="on")
+    led_events.wait_until_shown(red("on"))   # the timer may not be started yet
+    scheduler.run_due_actions(after=AUTO_OFF_SECS)
+    led_events.have_shown(red("off"))
+```
+
+Synchronise on the effect that comes last, here the timer being started:
+
+```python
+    led_events.wait_until_shown(red("on"))
+    wait_until(scheduler.has_pending_action)
+    scheduler.run_due_actions(after=AUTO_OFF_SECS)
+```
+
+Read the SUT's code, or its documentation, to find out what an action does
+after its first visible effect. If there is nothing to observe, that is a
+reason to add something: a notification, a status, or a test seam.
+
+### Polling tests run in phases
+
+A poller only sees the state at the moment it samples. If the state changes
+twice between samples, the poller never sees the first change. This is a
+*lost update*. So a polling test must run in phases. Each phase has one
+stimulus, then waits until its effect is visible, before the next phase starts.
+Do not send the next stimulus until the previous one has been seen to work.
+
+If the SUT can change state faster than the test can sample it, for example a
+20 ms blink, polling cannot test it reliably. Listen for notifications instead.
+A *NotificationTrace* keeps every event, so nothing is lost.
+
+### Testing that an action has no effect
+
+You cannot wait for something not to happen. Waiting for a fixed time is slow,
+and a check straight after the action passes before the SUT has even received
+it. Instead, follow the action with a second one that the SUT processes after
+the first and whose effect you can detect. Wait for that effect, then check
+that the first action changed nothing.
+
+With polling:
+
+```python
+def test_ignores_commands_for_other_devices(remote, device):
+    remote.send(OTHER_DEVICE, red_led="on")    # should be ignored
+    remote.send(THIS_DEVICE, green_led="on")   # processed after it
+    wait_until(leds(green("on")))
+    assert_that(device.gpios, red("off"))
+```
+
+The final check is a plain *assert_that*, because the SUT has already finished
+with the first command. With listening, use *assert_does_not_contain*, as shown
+in "Testing that an action has no effect" under "Checking what has already
+arrived".
+
+This only works if the SUT processes the two actions in order. Say so in a
+comment, and make sure that another test checks the order. Otherwise a change
+to the SUT could make this test pass without testing anything.
+
+### Hidden timers
+
+Some systems start their own activity with timers: an LED that switches itself
+off after 30 seconds, a nightly report, a retry after a back-off. Waiting for
+real time to pass makes the tests slow, and a timer that fires in the middle of
+a test makes it unpredictable.
+
+Freeman & Pryce's answer is to take the scheduling out of the SUT, so that the
+test can drive it. Give the SUT a scheduler, or a clock, as a dependency. In
+tests, pass a fake that runs actions only when the test tells it to:
+
+```python
+import threading
+
+class FakeScheduler:
+    """Stands in for threading.Timer. Actions run only when the test advances time."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._now = 0.0
+        self._pending = []                       # (due time, action)
+
+    def schedule(self, delay_secs, action):      # the SUT calls this
+        with self._lock:
+            self._pending.append((self._now + delay_secs, action))
+
+    def has_pending_action(self) -> bool:        # for wait_until
+        with self._lock:
+            return bool(self._pending)
+
+    def run_due_actions(self, after: float):     # the test calls this
+        with self._lock:
+            self._now += after
+            due = sorted((p for p in self._pending if p[0] <= self._now), key=lambda p: p[0])
+            self._pending = [p for p in self._pending if p[0] > self._now]
+        for _, action in due:
+            action()
+```
+
+The test then runs at full speed, and can check timing exactly: advance to just
+before the deadline and check that nothing has happened, then advance past it.
+See "Synchronise on the last effect" for how to wait until the timer exists.
+
+If the SUT does not let you replace its scheduler, that is design feedback:
+add the seam. Keep the real scheduler simple, test it on its own, and run a few
+slower end-to-end tests with it in place.
+
+### Flickering tests
+
+A test flickers when its timeout is too close to the time the SUT normally
+takes, or when it does not synchronise properly with the SUT. Do not live with
+flickering tests. They teach the team to ignore failures, and so they hide real
+intermittent defects in the SUT.
+
+* Measure how long the SUT normally takes, including on the slowest machine
+  that runs the tests, and set the duration well above that. A long duration
+  costs nothing when the test passes. It only delays the report of a failure.
+* Keep the polling delay small, so passing tests finish quickly. Make it
+  larger only if fast polling loads the SUT.
+* Set both values in one place. See the wrappers in "*assert_eventually* and
+  *wait_until*" and the domain helper in "Listening for notifications".
+* If a test still flickers, look for a missing synchronisation before you
+  increase the timeout. See "Runaway tests", "Synchronise on the last effect"
+  and "Polling tests run in phases".
+
+### Watch the test fail
+
+A passing asynchronous test does not prove much on its own. It may have checked
+before the SUT did anything. Before you rely on a test, make it fail: break the
+SUT, or change the expected value, and run it again. Check two things:
+
+* **It fails.** If it still passes, it is not testing what you think. Runaway
+  tests and tests that an action has no effect are the most likely to pass
+  without testing anything.
+* **The message explains the failure.** Someone who reads only the message
+  should understand what was expected and what happened. If they would not,
+  improve the matcher's descriptions. See "Let the matcher do the describing".
