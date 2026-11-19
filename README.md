@@ -138,6 +138,28 @@ For local development from a clone:
 pip install -e .
 ```
 
+## Using with Claude Code
+
+This repository is also a Claude Code plugin. It provides the skill
+*testing-async-code-with-asyncmatch*, which Claude uses when it writes or fixes
+tests for asynchronous Python code. The skill points Claude at this README, as
+installed with the package, and checks its tests against the guidelines here
+before it finishes. Install it from Claude Code:
+
+```
+/plugin install asyncmatch --marketplace dcdunn/asyncmatch
+```
+
+On Claude Code versions before 2.1.275, add the marketplace first:
+
+```
+/plugin marketplace add dcdunn/asyncmatch
+/plugin install asyncmatch@asyncmatch
+```
+
+The skill lives in *skills/testing-async-code-with-asyncmatch*. Its
+*test-fixtures* folder holds the fake systems that were used to test it.
+
 ## Polling for changes
 
 Freeman & Pryce create an asynchronous assertion method, that waits for a particular state of the SUT to occur, or else to fail by timing out. There are three concepts that are required: a *Timeout*, a *Probe* and a *Poller*. 

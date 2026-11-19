@@ -1,0 +1,18 @@
+{
+  "name": "asyncmatch",
+  "description": "Claude Code skill for writing reliable asynchronous Python tests with asyncmatch and PyHamcrest, following Growing Object-Oriented Software, Guided by Tests, chapter 27.",
+  "version": "0.2.1",
+  "author": {
+    "name": "David Dunn"
+  },
+  "homepage": "https://github.com/dcdunn/asyncmatch",
+  "repository": "https://github.com/dcdunn/asyncmatch",
+  "license": "MIT",
+  "keywords": [
+    "testing",
+    "asynchronous",
+    "pytest",
+    "hamcrest",
+    "goos"
+  ]
+}

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## [Unreleased]
+
+### Added
+- A Claude Code plugin with the skill `testing-async-code-with-asyncmatch` (`.claude-plugin/` and `skills/`). The skill sends Claude to the installed README, and has it check every test against the guidelines and report how each test was made to fail. The fake systems used to test the skill are in `skills/testing-async-code-with-asyncmatch/test-fixtures/`.
+- README: a "Using with Claude Code" section with the install commands.
+
 ## [0.2.1] - 2026-11-19
 
 ### Added
