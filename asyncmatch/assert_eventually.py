@@ -10,8 +10,9 @@ from typing import Optional, Union
 
 def _report_failure_of_probe(probe: Probe, reason: str, exc_type: Exception) -> None:
     description = StringDescription()
-    description.append_text(reason).  \
-        append_text("\nExpected: ").  \
+    if reason:
+        description.append_text(reason).append_text("\n")
+    description.append_text("Expected: ").  \
         append_description_of(probe). \
         append_text("\n     but: ")
     probe.describe_mismatch(description)

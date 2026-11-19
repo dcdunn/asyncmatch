@@ -337,3 +337,391 @@ def red_led_is_on():
 assert_eventually(red_led_is_on)
 
 ```
+## Listening for notifications
+
+Polling samples the state of the SUT. Freeman & Pryce describe a second way to
+synchronise: *listening*. The test records the events the SUT emits and waits
+for one that matches. Listening can do two things that polling cannot:
+
+* **No lost updates.** If a state is overwritten between two samples (a pulse,
+  a blink, a transient error), a poller never sees it. A trace keeps every
+  event.
+* **No poll delay.** The test thread blocks until an event is appended, then
+  wakes up at once. It does not wait for the next sample.
+
+Use polling when you can only read the state of the SUT. Use listening when the
+SUT, or a test double attached to it, tells you when something happens, for
+example through an MQTT subscription or a callback.
+
+A *NotificationTrace* records the events. Call *append* from the SUT's callback,
+which may run on any thread. Then make the assertion with
+*assert_eventually_contains*, or synchronise with *wait_until_contains*. These
+work like *assert_eventually* and *wait_until*: on timeout the first raises an
+*AssertionError* and the second raises a *SynchronisationTimeout*. Pass any
+Hamcrest matcher that fits the type of the items, and a duration:
+
+```python
+trace.assert_eventually_contains(has_entry("red_led", "blink"), 5.0)
+```
+
+The search covers every item appended since the trace was created. So an event
+is found even if it arrived before the test started waiting, or if other events
+followed it. No polling delay is needed.
+
+### Wrap the trace in a domain helper
+
+The call above is full of *how*: a trace, a payload format and a duration. In
+the polling section, a local *assert_eventually* hides the duration. For a
+trace, go one step further and hide the trace itself behind a *domain helper*.
+That is a small class that knows how the SUT reports events, and that offers
+methods named after what happens in the domain. The helper owns:
+
+* **the trace, and how it is connected to the SUT.** Tests never call
+  *append* and never see the trace.
+* **the payload format.** Matchers such as *red("blink")* hide that the
+  payload is a dictionary keyed by *red_led*.
+* **the duration.** Freeman & Pryce advise putting timeout values in one place.
+  For listening tests, the helper is that place. Find the right value by
+  experiment, as for polling, and change it in one line.
+* **the difference between asserting and synchronising.** Give each its own
+  name, so a reader can tell which calls are checks and which only wait for
+  the SUT to be ready.
+
+```python
+# led_events.py - this is not a real system!
+
+from asyncmatch import NotificationTrace
+from hamcrest import has_entry
+from hamcrest.core.matcher import Matcher
+
+_DURATION_SECS = 5.0
+
+def red(state: str) -> Matcher:
+    return has_entry("red_led", state)
+
+def green(state: str) -> Matcher:
+    return has_entry("green_led", state)
+
+class LedEvents:
+    def __init__(self, mqtt_client):
+        self._trace = NotificationTrace()
+        mqtt_client.on_message = lambda msg: self._trace.append(msg.payload)
+
+    def have_shown(self, matcher: Matcher) -> None:
+        """Assert: the LEDs eventually showed this."""
+        self._trace.assert_eventually_contains(matcher, _DURATION_SECS)
+
+    def wait_until_shown(self, matcher: Matcher) -> None:
+        """Synchronise: wait for the LEDs to show this before going on."""
+        self._trace.wait_until_contains(matcher, _DURATION_SECS)
+```
+
+The test then says only what should happen:
+
+```python
+def test_button_press_blinks_red_led(device, led_events):
+    device.press_button()
+    led_events.have_shown(red("blink"))
+```
+
+Because the matchers describe themselves, you rarely need a *reason*. When the
+trace times out, the failure message gives the expected notification and
+everything the trace received:
+
+```
+Expected: a notification matching a dictionary containing ['red_led': 'blink']
+     but: received [<{'red_led': 'on'}>, <{'red_led': 'off'}>]
+```
+
+The following sections add methods to the same helper.
+
+### Notifications in order
+
+*assert_eventually_contains* searches the whole history on every call. So it
+cannot tell "blink, then off" from "off, then blink". To check order, use
+*assert_eventually_contains_in_order*, or *wait_until_contains_in_order* to
+synchronise. Each takes a list of matchers. Each matcher must match a later
+notification than the one before it. Other notifications may arrive in between.
+The duration covers the whole sequence. Add a method to the helper, so the
+test still names only the states:
+
+```python
+# In LedEvents
+    def have_shown_in_order(self, *matchers: Matcher) -> None:
+        """Assert: the LEDs eventually showed these, in this order."""
+        self._trace.assert_eventually_contains_in_order(matchers, _DURATION_SECS)
+```
+
+```python
+def test_button_press_blinks_then_turns_off_red_led(device, led_events):
+    device.press_button()
+    led_events.have_shown_in_order(red("blink"), red("off"))
+```
+
+If the sequence does not arrive in time, the message says how far it got.
+It lists the notifications that matched, then what was received after the last
+match:
+
+```
+Expected: notifications matching a dictionary containing ['red_led': 'blink'] then a dictionary containing ['red_led': 'off'], in order
+     but: matched <{'red_led': 'blink'}>, then received [<{'red_led': 'on'}>]
+```
+
+Each call searches from the start of the trace, so calls do not affect each
+other.
+
+### Checking what has already arrived
+
+A common pattern is to wait for the SUT to say it has finished, and then check
+what it reported along the way. The waiting is a synchronisation. The checks
+that follow do not need to wait, because the notifications they look at have
+already arrived. *assert_contains*, *assert_contains_in_order* and
+*assert_does_not_contain* check the trace once, with no duration.
+
+Put them in the helper next to the waiting methods. Give them names that show
+they look at what has already happened:
+
+```python
+# In LedEvents
+    def wait_until_ready(self) -> None:
+        """Synchronise: the device has finished starting up."""
+        self._trace.wait_until_contains(has_entry("status", "ready"), _DURATION_SECS)
+
+    def showed(self, matcher: Matcher) -> None:
+        """Check, without waiting: the LEDs have already shown this."""
+        self._trace.assert_contains(matcher)
+
+    def showed_in_order(self, *matchers: Matcher) -> None:
+        """Check, without waiting: the LEDs have already shown these, in order."""
+        self._trace.assert_contains_in_order(matchers)
+
+    def never_showed(self, matcher: Matcher) -> None:
+        """Check, without waiting: the LEDs have not shown this."""
+        self._trace.assert_does_not_contain(matcher)
+```
+
+```python
+def test_start_up_lights_red_then_green(device, led_events):
+    device.power_on()
+    led_events.wait_until_ready()
+    led_events.showed_in_order(red("on"), green("on"))
+```
+
+If the start-up sequence is wrong, the test fails as soon as the device is
+ready. It does not wait for the full duration.
+
+**These checks are only sound after a synchronisation.** On their own they test
+an asynchronous system synchronously, and the result depends on timing. Before
+a check, wait for a notification that the SUT sends *no earlier* than the ones
+you check: the same notification, or one that comes after them. That assumes
+the SUT sends its notifications in order, so make sure another test covers
+that.
+
+#### Testing that an action has no effect
+
+*assert_does_not_contain* is how a listening test shows that something did
+*not* happen. Freeman & Pryce describe the technique in "Testing That an
+Action Has No Effect". You cannot wait for something not to happen. Instead,
+trigger a second action that the SUT will process *after* the first and
+whose effect you can detect. Synchronise on that effect, then check that the
+first action left no trace:
+
+```python
+def test_ignores_commands_for_other_devices(remote, led_events):
+    remote.send(OTHER_DEVICE, {"red_led": "on"})   # should be ignored
+    remote.send(THIS_DEVICE, {"green_led": "on"})  # processed after it
+    led_events.wait_until_shown(green("on"))
+    led_events.never_showed(red("on"))
+```
+
+If the ignored command did have an effect, the message names the notification
+that should not be there:
+
+```
+Expected: no notification matching a dictionary containing ['red_led': 'on']
+     but: received [<{'red_led': 'on'}>]
+```
+
+As Freeman & Pryce note, this test relies on the SUT processing commands in
+the order they were sent. If the second command could overtake the first, the
+test could pass before the first one had any effect.
+
+### Testing in phases
+
+Some tests run in phases. Phase 1 ends with a "done" notification, the test
+checks what happened in phase 1, then phase 2 runs, and so on. Each phase's
+checks should look only at that phase's notifications. A trace offers two
+ways to do this. Which one to use depends on **who starts the next phase**.
+
+| Who starts the next phase? | Use | Why |
+|---|---|---|
+| The SUT. It moves on by itself, perhaps straight away. | *wait_until_phase_ends* | The phase boundary is set by the SUT's own "done" notification, so nothing is lost however quickly the SUT moves on. |
+| The test. Nothing happens until the test acts. | *clear* | Simpler. Safe because the SUT is quiet when the test clears the trace. |
+
+If you are not sure, use *wait_until_phase_ends*. It is correct in both cases.
+
+#### The SUT starts each phase: *wait_until_phase_ends*
+
+*wait_until_phase_ends(sentinel, duration)* waits for the notification that
+ends the current phase (the *sentinel*). It returns a *Phase*: a snapshot of
+every notification from the end of the previous phase up to and including the
+sentinel. A *Phase* has the same checks as the trace: *assert_contains*,
+*assert_contains_in_order* and *assert_does_not_contain*. None of them wait.
+
+For example, suppose a device's self-test checks its lamps and then its
+network, one stage straight after the other. It reports the end of each stage:
+
+```python
+# In led_events.py
+from asyncmatch import Phase
+
+# In LedEvents
+    def wait_until_stage_done(self, stage: str) -> Phase:
+        """Synchronise: a self-test stage has finished. Returns its notifications."""
+        return self._trace.wait_until_phase_ends(has_entry("self_test", f"{stage} done"), _DURATION_SECS)
+```
+
+```python
+def test_self_test_checks_lamps_then_network(device, led_events):
+    device.start_self_test()
+
+    lamps = led_events.wait_until_stage_done("lamps")
+    lamps.assert_contains_in_order([red("on"), green("on")])
+    lamps.assert_does_not_contain(red("blink"))
+
+    network = led_events.wait_until_stage_done("network")
+    network.assert_contains(green("blink"))
+```
+
+How it behaves:
+
+* **Nothing is lost.** Notifications that arrive after a sentinel stay in the
+  trace for the next phase. The network stage may start, or even finish,
+  before the test has looked at the lamps stage. Its notifications are still
+  there for the second *wait_until_stage_done*.
+* **Each search starts after the previous sentinel.** Phases that end with the
+  same notification, such as a plain "done", are still told apart.
+* **The checks on a Phase are always safe.** The warning in "Checking what has
+  already arrived" does not apply here. A *Phase* only exists once its
+  sentinel has arrived, so its checks cannot run too early.
+* **Failure messages list only that phase's notifications.** They are easier
+  to read than the whole history:
+
+  ```
+  Expected: a notification matching a dictionary containing ['green_led': 'blink']
+       but: received [<{'green_led': 'on'}>, <{'self_test': 'network done'}>]
+  ```
+* **If a phase never ends**, *wait_until_phase_ends* raises a
+  *SynchronisationTimeout* that lists the notifications received since the
+  previous phase ended.
+
+The methods that search the whole history, such as *assert_eventually_contains*
+and *assert_contains*, ignore phases. They still see every notification.
+
+#### The test starts each phase: *clear*
+
+*clear()* discards every notification recorded so far. Use it when each phase
+starts only because the test does something. Call *clear* **before** that
+action:
+
+```python
+# In LedEvents
+    def forget_earlier_events(self) -> None:
+        """Start afresh: only notifications from now on count."""
+        self._trace.clear()
+```
+
+```python
+def test_every_button_press_blinks_the_red_led(device, led_events):
+    for _ in range(3):
+        led_events.forget_earlier_events()
+        device.press_button()
+        led_events.have_shown(red("blink"))
+```
+
+Without *clear*, the second and third *have_shown* would pass immediately on
+the first press's blink, without testing anything.
+
+Two rules make *clear* safe:
+
+* **Clear before the action that starts the phase, never after it.** A
+  notification that arrives between the action and *clear* is lost.
+* **Clear only when the SUT is quiet.** The previous phase must be over, which
+  you know because the test has already synchronised on it. If the SUT could
+  already be sending the next phase's notifications, *clear* throws them away.
+  The test then fails, or passes, depending on timing. Use
+  *wait_until_phase_ends* instead.
+
+### Notifications immediately in sequence
+
+*assert_eventually_contains_in_order* allows anything in between. Sometimes
+the test needs one notification to come *immediately* after another. For
+example, the LED must go from blink straight to off, with no other state in
+between.
+
+To check that, record *transitions*. Each time a notification arrives, append
+the pair (previous notification, this notification) to a second trace. "Blink
+immediately followed by off" is then a single item in that trace. Hamcrest's
+*contains_exactly* matches it.
+
+This is the kind of detail a domain helper is for. The second trace, the lock
+and the pairing all stay inside *LedEvents*. Only the connection to the SUT
+changes, and one method is added:
+
+```python
+# led_events.py - changes to LedEvents
+from threading import Lock
+from hamcrest import contains_exactly
+
+class LedEvents:
+    def __init__(self, mqtt_client):
+        self._trace = NotificationTrace()
+        self._transitions = NotificationTrace()
+        self._lock = Lock()
+        self._previous = None
+        mqtt_client.on_message = lambda msg: self._record(msg.payload)
+
+    def _record(self, payload) -> None:
+        self._trace.append(payload)
+        with self._lock:
+            if self._previous is not None:
+                self._transitions.append((self._previous, payload))
+            self._previous = payload
+
+    # The other methods are unchanged
+
+    def have_shown_consecutively(self, first: Matcher, then: Matcher) -> None:
+        """Assert: the LEDs eventually showed first, then immediately then."""
+        self._transitions.assert_eventually_contains(contains_exactly(first, then), _DURATION_SECS)
+```
+
+```python
+def test_red_led_stops_blinking_by_turning_off(device, led_events):
+    device.press_button()
+    led_events.have_shown_consecutively(red("blink"), red("off"))
+```
+
+The transitions trace works like any other trace. It searches every transition
+since it was created, and it wakes as soon as the pair arrives. If the pair
+never arrives, the message lists every transition received:
+
+```
+Expected: a notification matching a sequence containing [a dictionary containing ['red_led': 'on'], a dictionary containing ['red_led': 'off']]
+     but: received [<({'red_led': 'on'}, {'red_led': 'blink'})>, <({'red_led': 'blink'}, {'red_led': 'off'})>]
+```
+
+Things to keep in mind:
+
+* **Protect the previous notification.** The trace's own lock only covers
+  *append*. Pairing a notification with the one before it is a separate
+  read-then-write. The lock in *_record* keeps the pairs correct if the SUT
+  calls back from more than one thread. If you know the callbacks always come
+  from one thread, as with most MQTT clients, you can drop it.
+* **"Immediately" means in the order *append* was called.** That matches what
+  the SUT did only if its callbacks arrive in the order it emitted them. Check
+  this before you rely on it. As with the "has no effect" technique, the test
+  makes an assumption about how the system is built. Make sure another test
+  covers that assumption.
+* **Keep the pairs out of the test.** The test should say what happened, as in
+  *have_shown_consecutively(red("blink"), red("off"))*, not how the helper
+  records it.

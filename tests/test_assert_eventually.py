@@ -89,3 +89,14 @@ class TestReportFailureOfProbe:
         with pytest.raises(SomeError) as err:
             _report_failure_of_probe(probe, "", SomeError)
         assert_that(str(err.value), contains_string("     but: FakeProbe mismatch"))
+    def test_should_start_with_expected_when_no_reason(self):
+        probe = FakeProbe(False)
+        with pytest.raises(SomeError) as err:
+            _report_failure_of_probe(probe, "", SomeError)
+        assert_that(str(err.value), starts_with("Expected: FakeProbe"))
+
+    def test_should_put_reason_on_its_own_line(self):
+        probe = FakeProbe(False)
+        with pytest.raises(SomeError) as err:
+            _report_failure_of_probe(probe, "Bespoke reason", SomeError)
+        assert_that(str(err.value), starts_with("Bespoke reason\nExpected: FakeProbe"))
