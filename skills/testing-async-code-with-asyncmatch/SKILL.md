@@ -15,7 +15,7 @@ The asyncmatch README is the reference. It has a quick-reference table, guidelin
 python -c "import importlib.metadata as m; d = m.distribution('asyncmatch'); print(d.version); print(d.read_text('METADATA'))"
 ```
 
-- **Not installed:** run `pip install "git+https://github.com/dcdunn/asyncmatch.git@v0.2.1"`.
+- **Not installed:** run `pip install asyncmatch`.
 - **Older than 0.2.1:** the README lacks the "Guidelines" and "Avoiding unreliable tests" sections. Read https://github.com/dcdunn/asyncmatch/blob/main/README.md and suggest an upgrade.
 
 ## 2. Choose polling or listening

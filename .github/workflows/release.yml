@@ -1,0 +1,92 @@
+name: Release
+
+# Publishing a GitHub release publishes to PyPI.
+# Running the workflow by hand publishes to TestPyPI, for a dry run.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e . -r tests/requirements.txt
+      - run: pytest tests
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Check the versions agree, and match the release tag
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.ref_name || '' }}
+        run: |
+          python - <<'EOF'
+          import json, os, sys, tomllib
+
+          pyproject = tomllib.load(open("pyproject.toml", "rb"))
+          versions = {
+              "pyproject.toml [project]": pyproject["project"]["version"],
+              "pyproject.toml [tool.bumpversion]": pyproject["tool"]["bumpversion"]["current_version"],
+              ".claude-plugin/plugin.json": json.load(open(".claude-plugin/plugin.json"))["version"],
+          }
+          if os.environ["RELEASE_TAG"]:
+              versions["release tag"] = os.environ["RELEASE_TAG"].removeprefix("v")
+          for source, version in versions.items():
+              print(f"{version:>10}  {source}")
+          if len(set(versions.values())) != 1:
+              sys.exit("The versions differ. Run bump-my-version, or correct the release tag.")
+          EOF
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-testpypi:
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/asyncmatch
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/asyncmatch
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

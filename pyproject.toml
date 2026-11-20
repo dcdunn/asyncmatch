@@ -1,16 +1,31 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "asyncmatch"
-version = "0.2.1"
-description = "Asynchronous polling assertions for Python tests"
+version = "0.2.2"
+description = "Hamcrest compatible assertions for testing asynchronous code, by polling or by listening for notifications"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
   { name = "David Dunn" }
+]
+keywords = ["testing", "asynchronous", "hamcrest", "pytest", "polling", "integration testing"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Framework :: Pytest",
+  "Topic :: Software Development :: Testing",
 ]
 dependencies = [
   "PyHamcrest>=2.0"
@@ -20,6 +35,29 @@ dependencies = [
 Homepage = "https://github.com/dcdunn/asyncmatch"
 Repository = "https://github.com/dcdunn/asyncmatch"
 Issues = "https://github.com/dcdunn/asyncmatch/issues"
+Changelog = "https://github.com/dcdunn/asyncmatch/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 packages = ["asyncmatch"]
+
+# Release: run "bump-my-version bump patch" (or minor, major), write the CHANGELOG entry, commit, then publish a
+# GitHub release tagged v<version>. The Release workflow fails if any of these files disagrees with the tag.
+[tool.bumpversion]
+current_version = "0.2.2"
+commit = false
+tag = false
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = ".claude-plugin/plugin.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "asyncmatch.git@v{current_version}"
+replace = "asyncmatch.git@v{new_version}"

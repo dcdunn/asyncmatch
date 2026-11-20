@@ -119,14 +119,20 @@ sections that follow explain each one.
 
 ## Installation
 
-Install from GitHub using pip:
+Install from PyPI:
+
+```bash
+pip install asyncmatch
+```
+
+Or install from GitHub:
 
 ```bash
 # Latest from default branch
 pip install "git+https://github.com/dcdunn/asyncmatch.git"
 
 # Pinned to a release tag (recommended)
-pip install "git+https://github.com/dcdunn/asyncmatch.git@v0.2.1"
+pip install "git+https://github.com/dcdunn/asyncmatch.git@v0.2.2"
 
 # Pinned to a specific commit
 pip install "git+https://github.com/dcdunn/asyncmatch.git@<commit-sha>"
