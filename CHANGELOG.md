@@ -4,11 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## [Unreleased]
+## [0.2.2] - 2026-11-20
 
 ### Added
+- Published on PyPI: `pip install asyncmatch`. A GitHub release publishes it, through the `Release` workflow and PyPI Trusted Publishing; running the workflow by hand publishes to TestPyPI.
 - A Claude Code plugin with the skill `testing-async-code-with-asyncmatch` (`.claude-plugin/` and `skills/`). The skill sends Claude to the installed README, and has it check every test against the guidelines and report how each test was made to fail. The fake systems used to test the skill are in `skills/testing-async-code-with-asyncmatch/test-fixtures/`.
 - README: a "Using with Claude Code" section with the install commands.
+
+### Changed
+- Package metadata: a description that covers listening as well as polling, an SPDX licence expression, classifiers, keywords and a changelog link.
+- README: installation from PyPI comes first.
+- The skill installs asyncmatch from PyPI.
+- The plugin's version is set only in `plugin.json`. The marketplace entry no longer repeats it, as the Claude Code documentation advises.
+- Releasing: `bump-my-version bump patch` (or `minor`, `major`) updates every file that names the version. The `Release` workflow fails if they disagree with each other or with the release tag.
 
 ## [0.2.1] - 2026-11-19
 

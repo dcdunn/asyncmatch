@@ -1,7 +1,7 @@
 {
   "name": "asyncmatch",
   "description": "Claude Code skill for writing reliable asynchronous Python tests with asyncmatch and PyHamcrest, following Growing Object-Oriented Software, Guided by Tests, chapter 27.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": {
     "name": "David Dunn"
   },
